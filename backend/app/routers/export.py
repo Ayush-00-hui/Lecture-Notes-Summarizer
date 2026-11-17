@@ -15,11 +15,11 @@ class ExportPayload(BaseModel):
 
 @router.post("/{format}")
 async def export_document(
-    format: Literal["markdown", "docx", "pdf", "json"],
+    format: Literal["markdown", "docx", "pdf", "json", "txt"],
     payload: ExportPayload
 ):
     """
-    Exports study notes or comparison benchmark reports into Markdown, DOCX, PDF, or JSON.
+    Exports study notes or comparison benchmark reports into Markdown, DOCX, PDF, TXT, or JSON.
     """
     try:
         if payload.type == "study_package":
@@ -30,7 +30,7 @@ async def export_document(
         raise HTTPException(status_code=400, detail=f"Invalid payload data structure: {str(e)}")
 
     safe_title = "".join(c for c in payload.title if c.isalnum() or c in (' ', '_', '-')).strip()
-    safe_title = safe_title.replace(" ", "_")
+    safe_title = safe_title.replace(" ", "_") or "notenest_summary"
 
     if format == "markdown":
         md_content = ExporterService.to_markdown(model_data, title=payload.title)
@@ -38,6 +38,14 @@ async def export_document(
             content=md_content,
             media_type="text/markdown",
             headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'}
+        )
+
+    elif format == "txt":
+        txt_content = ExporterService.to_txt(model_data, title=payload.title)
+        return Response(
+            content=txt_content,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'}
         )
 
     elif format == "docx":

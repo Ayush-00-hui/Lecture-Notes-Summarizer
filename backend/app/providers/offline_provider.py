@@ -376,28 +376,34 @@ class OfflineProvider(LLMProvider):
             )
 
         ranked_sents = OfflineNLP.textrank_sentences(sentences)
-        
-        lead_sentences = ranked_sents[:2]
-        mechanism_sentences = ranked_sents[2:5]
-        concluding_sentences = ranked_sents[5:7] if len(ranked_sents) > 5 else ranked_sents[:1]
-        
-        overview_part = " ".join([s for s, _ in lead_sentences])
-        mechanism_part = " ".join([s for s, _ in mechanism_sentences])
-        takeaways_part = " ".join([s for s, _ in concluding_sentences])
-        
-        summary_markdown = (
-            f"### Executive Overview & Core Problem Formulation\n{overview_part}\n\n"
-            f"### Key Theoretical Principles & System Invariants\n{mechanism_part}\n\n"
-            f"### Failure Modes, Quorum Proofs & Operational Trade-offs\n"
-            f"- **Safety vs Liveness**: Real-world distributed state machines guarantee Safety (never committing divergent states) over Liveness.\n"
-            f"- **Quorum Intersection**: Any two majorities of size $\\lfloor N/2 \\rfloor + 1$ intersect in at least one node, ensuring no split-brain commits.\n"
-            f"- **Randomized Election Timers**: Bypasses prolonged split-vote livelock by staggering candidate transitions between 150ms and 300ms.\n\n"
-            f"### Pedagogical Synthesis & Cloud Infrastructure Applications\n{takeaways_part}"
-        )
+        is_short = word_limit <= 220
+
+        if is_short:
+            # Concise 3-4 sentence summary directly from highest-centrality source sentences
+            short_sents = ranked_sents[:3]
+            overview_part = " ".join([s for s, _ in short_sents])
+            summary_markdown = f"### Concise Summary\n\n{overview_part}"
+        else:
+            # Detailed multi-section summary grounded strictly in source sentences
+            lead_sentences = ranked_sents[:2]
+            detail_sentences = ranked_sents[2:6]
+            concluding_sentences = ranked_sents[6:8] if len(ranked_sents) > 6 else ranked_sents[-2:]
+
+            overview_part = " ".join([s for s, _ in lead_sentences])
+            bullet_lines = "\n".join([f"- {s}" for s, _ in detail_sentences]) if detail_sentences else ""
+            takeaways_part = " ".join([s for s, _ in concluding_sentences])
+
+            sections = [f"### Executive Overview\n\n{overview_part}"]
+            if bullet_lines:
+                sections.append(f"### Key Theoretical Principles & Details\n\n{bullet_lines}")
+            if takeaways_part and takeaways_part != overview_part:
+                sections.append(f"### Key Takeaways\n\n{takeaways_part}")
+            summary_markdown = "\n\n".join(sections)
 
         # Generate Key Concepts with exact citation and authentic context
         concepts: List[KeyConcept] = []
-        context_tuples = OfflineNLP.extract_keyphrases_with_context(text, top_k=6)
+        concept_count = 4 if is_short else 6
+        context_tuples = OfflineNLP.extract_keyphrases_with_context(text, top_k=concept_count)
         
         for idx, (phrase, best_s, citation) in enumerate(context_tuples):
             clean_def = best_s.strip()
@@ -419,13 +425,14 @@ class OfflineProvider(LLMProvider):
                 formula_or_code=details["formula_or_code"]
             ))
 
-        # Generate Revision Points with genuine exam questions & full-credit criteria
+        # Generate Revision Points grounded in source sentences
         revision_points: List[RevisionPoint] = []
-        topics = ["Foundational Theory", "Leader Election & Consensus", "Log Replication & Quorums", "Partition Fault Tolerance"]
+        topics = ["Core Concept", "Key Detail", "Mechanism", "Application", "Takeaway"]
         blooms = ["Analysis", "Evaluation", "Application", "Recall", "Design"]
         difficulties = ["Standard", "Challenging", "Edge Case", "Standard", "Challenging"]
+        rev_count = 3 if is_short else 5
         
-        for idx, (s, _) in enumerate(ranked_sents[:5]):
+        for idx, (s, _) in enumerate(ranked_sents[:rev_count]):
             topic = topics[idx % len(topics)]
             citation = self._extract_source_citation(text, s)
             
@@ -525,12 +532,17 @@ class OfflineProvider(LLMProvider):
         is_structured = "cognitive scaffold" in system_prompt.lower() or "few-shot" in user_prompt.lower() or "master tutor" in system_prompt.lower()
         
         word_target = 150
-        length_match = re.search(r'Length target:\s*(\d+)', user_prompt)
+        prompt_lower = user_prompt.lower()
+        length_match = re.search(r'(?:desired summary length|length target|approximately|~)\s*:?\s*(\d+)', prompt_lower)
         if length_match:
             word_target = int(length_match.group(1))
+        elif "short" in prompt_lower[:300]:
+            word_target = 150
+        elif "detailed" in prompt_lower[:300]:
+            word_target = 500
             
         if is_structured:
-            output = self.generate_strategy_b_structured(text, word_limit=max(word_target, 350))
+            output = self.generate_strategy_b_structured(text, word_limit=word_target)
         else:
             output = self.generate_strategy_a_direct(text, word_limit=word_target)
             

@@ -189,7 +189,7 @@ export const api = {
 
   // Export
   async exportFile(
-    format: 'markdown' | 'docx' | 'pdf' | 'json',
+    format: 'markdown' | 'docx' | 'pdf' | 'json' | 'txt',
     title: string,
     type: 'study_package' | 'comparison_report',
     data: StudyPackageOutput | CompareResponse

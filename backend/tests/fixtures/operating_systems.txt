@@ -1,0 +1,12 @@
+# Lecture 7: Virtual Memory Management
+
+## Paging and Page Faults
+Virtual memory provides an abstraction of uniform memory space per process.
+The Memory Management Unit (MMU) translates virtual addresses to physical frame addresses using page tables.
+When a process requests an address not present in physical RAM, the CPU hardware raises a page fault trap.
+
+## Page Replacement Algorithms
+The operating system must select a victim page to evict:
+- FIFO (First In First Out): simple but exhibits Belady's Anomaly.
+- LRU (Least Recently Used): approximates optimal replacement using stack distance or reference bits.
+- Clock Algorithm: circular buffer approximation of LRU with low overhead.

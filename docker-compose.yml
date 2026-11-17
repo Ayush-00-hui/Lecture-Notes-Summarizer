@@ -1,0 +1,18 @@
+services:
+  notenest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notenest-app
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gemini-1.5-flash}
+      - DATABASE_URL=sqlite+aiosqlite:///./notenest.db
+    volumes:
+      - notenest-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  notenest-data:
